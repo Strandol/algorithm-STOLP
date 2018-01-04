@@ -2,21 +2,36 @@ let _ = require('lodash');
 let fs = require('fs');
 
 let standarts = [];
-let teachSet = fs.readFileSync('../lab1/src/testTeach.txt').toString();
+let teachSet = null;
+let examSet = null;
 
 teachSet = readTeachSet();
 teachSet = sortByClasses(teachSet);
 teachSet = calcPowers(teachSet);
 standarts = findStandarts(teachSet);
 
-_.forEach(teachSet, (set, _class) => {
-  let res = _.map(set, obj =>
-    _.minBy(standarts, (standart) =>
-      calcMetric(standart.val, obj.val)
-    )
+let isHaveMistakes = true;
+
+while (isHaveMistakes) {
+  let mistake = findMaxByPowerMistakeObj(teachSet);
+
+  if (!mistake) {
+    isHaveMistakes = false;
+  } else {
+    standarts.push(mistake);
+  }
+}
+
+examSet = readExamSet();
+
+_.forEach(examSet, (obj) => {
+  let etalon = _.minBy(standarts, (standart) => 
+    calcMetric(standart.val, obj)
   )
 
-  console.log(res.map(obj => obj._class)); // ОСТАНОВИЛСЯ НА МЕТОДЕ БЛИЖАЙШЕГО СОСЕДА
+  console.log('ETALON', etalon);
+  console.log('OBJECT', obj);
+  console.log('------------------');
 })
 
 function readTeachSet() {
@@ -27,6 +42,12 @@ function readTeachSet() {
       val: str.slice(0, -1),
       _class: str.slice(str.length - 1)
     }))
+}
+
+function readExamSet() {
+  return fs.readFileSync('../lab1/src/withoutMarks.txt')
+    .toString()
+    .split('\n')
 }
 
 function sortByClasses(teachSet) {
@@ -89,6 +110,23 @@ function findStandarts(set) {
   return _.map(set, (objSubset, _class) =>
     _.maxBy(objSubset, ({ power }) => power)
   )
+}
+
+function findMaxByPowerMistakeObj(teachSet) {
+  let mistakeObjects = _.flattenDeep(_.map(teachSet, (set, _class) => {
+    return _.filter(set, obj => {
+      let predictClass = _.minBy(standarts, (standart) =>
+        calcMetric(standart.val, obj.val)
+      )
+
+      return predictClass._class !== obj._class
+    })
+  }))
+
+  console.log(mistakeObjects.map(obj => obj._class).join(' '));
+  console.log('------------------');
+
+  return _.maxBy(mistakeObjects, 'power');
 }
 
 function calcMetric(x, y) {
