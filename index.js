@@ -1,41 +1,106 @@
 let _ = require('lodash');
 let fs = require('fs');
+let path = require('path');
+let readline = require('readline');
+
+const WIDTH = 5;
+const HEIGHT = 6;
+
+const ENTRY_MSG = `
+    Введите вариант действия:
+    1. Обучить
+    2. Классифицировать
+    3. Вывести на экран классифицированные объекты в интерактивном представлении
+    4. Вывести на экран классифицированные объекты в виде векторов
+    5. Выйти
+    Ответ: `;
+
+const TEACH_PATH = path.join(__dirname, '../lab1/src/testTeach.txt');
+const EXAM_PATH = path.join(__dirname, '../lab1/src/withoutMarks.txt');
+const OUTPUT_PATH = path.join(__dirname, 'predict.txt');
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
 
 let standarts = [];
-let teachSet = null;
-let examSet = null;
+let teachSet = readTeachSet();
+let examSet = readExamSet();
 
-teachSet = readTeachSet();
 teachSet = sortByClasses(teachSet);
-teachSet = calcPowers(teachSet);
-standarts = findStandarts(teachSet);
 
-let isHaveMistakes = true;
+showEntry();
 
-while (isHaveMistakes) {
-  let mistake = findMaxByPowerMistakeObj(teachSet);
+function teach() {
+  standarts = [];
 
-  if (!mistake) {
-    isHaveMistakes = false;
-  } else {
-    standarts.push(mistake);
+  let teachSetWithPowers = calcPowers(teachSet);
+  standarts = findStandarts(teachSetWithPowers);
+
+  let isHaveMistakes = true;
+
+  while (isHaveMistakes) {
+    let mistake = findMaxByPowerMistakeObj(teachSetWithPowers);
+
+    if (!mistake) {
+      isHaveMistakes = false;
+    } else {
+      standarts.push(mistake);
+    }
   }
+
+  console.log(standarts);
 }
 
-examSet = readExamSet();
+function classify() {
+  let output = [];
 
-_.forEach(examSet, (obj) => {
-  let etalon = _.minBy(standarts, (standart) => 
-    calcMetric(standart.val, obj)
-  )
+  if (!standarts.length) {
+    console.log('С начала необходимо произвести обучение, а затем классификацию!')
+    return;
+  }
 
-  console.log('ETALON', etalon);
-  console.log('OBJECT', obj);
-  console.log('------------------');
-})
+  _.forEach(examSet, (obj) => {
+    let etalon = _.minBy(standarts, (standart) =>
+      calcMetric(standart.val, obj)
+    )
+
+    output.push(`${obj} : ${etalon._class}`)
+  })
+
+  fs.writeFileSync(OUTPUT_PATH, output.join('\n'));
+}
+
+function showEntry() {
+  rl.question(ENTRY_MSG, (answer) => {
+    switch (answer) {
+      case '1':
+        teach();
+        break;
+      case '2':
+        classify();
+        break;
+      case '3':
+        showBeautyClassified();
+        break;
+      case '4':
+        showClassified();
+        break;
+      case '5':
+        process.exit();
+        return;
+      default:
+        console.log('Введите вариант из предложенных выше!');
+        showEntry();
+    }
+
+    showEntry();
+  });
+}
 
 function readTeachSet() {
-  return fs.readFileSync('../lab1/src/testTeach.txt')
+  return fs.readFileSync(TEACH_PATH)
     .toString()
     .split('\n')
     .map(str => ({
@@ -45,9 +110,38 @@ function readTeachSet() {
 }
 
 function readExamSet() {
-  return fs.readFileSync('../lab1/src/withoutMarks.txt')
+  return fs.readFileSync(EXAM_PATH)
     .toString()
     .split('\n')
+}
+
+function showBeautyClassified() {
+  let objects = fs.readFileSync(OUTPUT_PATH).toString();
+
+  if (!objects.length) {
+    console.log('Классификация не была произведена!');
+    return;
+  }
+
+  objects = objects.split('\n');
+
+  _.forEach(objects, obj => {
+    let predictedClass = obj.slice(-1);
+    let vector = obj.match(/\d+/ig)[0];
+
+    showImageRep(obj, predictedClass);
+  })
+}
+
+function showClassified() {
+  let objects = fs.readFileSync(OUTPUT_PATH).toString();
+
+  if (!objects.length) {
+    console.log('Классификация не была произведена!');
+    return;  
+  }
+
+  console.log(objects);
 }
 
 function sortByClasses(teachSet) {
@@ -123,8 +217,8 @@ function findMaxByPowerMistakeObj(teachSet) {
     })
   }))
 
-  console.log(mistakeObjects.map(obj => obj._class).join(' '));
-  console.log('------------------');
+  // console.log(mistakeObjects.map(obj => obj._class).join(' '));
+  // console.log('------------------');
 
   return _.maxBy(mistakeObjects, 'power');
 }
@@ -139,4 +233,14 @@ function calcMetric(x, y) {
     i++;
     return Math.abs(xVal - y[i])
   })
+}
+
+function showImageRep(value, predictedClass) {
+  let result = value
+    .match(/\d{5}/g)
+    .join('\n')
+    .replace(/1/g, '*')
+    .replace(/0/g, '-');
+  console.log('Predicted class - ', predictedClass);
+  console.log(`\n${result}\n`);
 }
