@@ -6,13 +6,17 @@ let readline = require('readline');
 const WIDTH = 5;
 const HEIGHT = 6;
 
+const FIRST_PART = 0.7;
+const SECOND_PART = 0.3;
+
 const ENTRY_MSG = `
     Введите вариант действия:
     1. Обучить
     2. Классифицировать
     3. Вывести на экран классифицированные объекты в интерактивном представлении
     4. Вывести на экран классифицированные объекты в виде векторов
-    5. Выйти
+    5. Оценить качество классификации
+    6. Выйти
     Ответ: `;
 
 const TEACH_PATH = path.join(__dirname, '../lab1/src/testTeach.txt');
@@ -32,7 +36,7 @@ teachSet = sortByClasses(teachSet);
 
 showEntry();
 
-function teach() {
+function teach(teachSet) {
   standarts = [];
 
   let teachSetWithPowers = calcPowers(teachSet);
@@ -50,10 +54,10 @@ function teach() {
     }
   }
 
-  console.log(standarts);
+  // console.log(standarts);
 }
 
-function classify() {
+function classify(examSet) {
   let output = [];
 
   if (!standarts.length) {
@@ -76,10 +80,10 @@ function showEntry() {
   rl.question(ENTRY_MSG, (answer) => {
     switch (answer) {
       case '1':
-        teach();
+        teach(teachSet);
         break;
       case '2':
-        classify();
+        classify(examSet);
         break;
       case '3':
         showBeautyClassified();
@@ -88,6 +92,12 @@ function showEntry() {
         showClassified();
         break;
       case '5':
+        rl.question('Введите количество испытаний: ', count => {
+          getQuality(count);
+          showEntry();
+        })
+        break;
+      case '6':
         process.exit();
         return;
       default:
@@ -206,8 +216,8 @@ function findStandarts(set) {
   )
 }
 
-function findMaxByPowerMistakeObj(teachSet) {
-  let mistakeObjects = _.flattenDeep(_.map(teachSet, (set, _class) => {
+function findMaxByPowerMistakeObj(objSet) {
+  let mistakeObjects = _.flattenDeep(_.map(objSet, (set, _class) => {
     return _.filter(set, obj => {
       let predictClass = _.minBy(standarts, (standart) =>
         calcMetric(standart.val, obj.val)
@@ -243,4 +253,74 @@ function showImageRep(value, predictedClass) {
     .replace(/0/g, '-');
   console.log('Predicted class - ', predictedClass);
   console.log(`\n${result}\n`);
+}
+
+function getQuality(n) {
+  let percents = [];
+  let loadedTeach = readTeachSet();
+
+  while (n) {
+    let teachSet = _.shuffle(loadedTeach);
+
+    let endOfFirstPart = Math.round(teachSet.length * FIRST_PART);
+
+    let firstPart = teachSet.slice(0, endOfFirstPart);
+    let secondPart = teachSet.slice(endOfFirstPart).map(obj => obj.val);
+
+    firstPart = sortByClasses(firstPart);
+
+    teach(firstPart);
+    classify(secondPart);
+
+    //Проценты успешно классифицированных
+    let classified = fs.readFileSync(OUTPUT_PATH).toString().split('\n');
+    secondPart = teachSet.slice(endOfFirstPart);
+
+    let mistakeObjects = _.filter(classified, (classifiedObj, i) => {
+      let predictClass = classifiedObj.slice(-1);
+
+      return secondPart[i]._class !== predictClass
+    })
+
+    let successPercent = ((classified.length - mistakeObjects.length) / classified.length) * 100;
+    percents.push(_.round(successPercent, 2));
+    n--;
+  }
+
+  standarts = [];
+
+  console.log(percents.join('|'));
+  console.log('Среднее значение ---', getAverage(percents));
+  console.log('Медиана ---', getMedian(percents));
+  console.log('Размах ---', getRange(percents));
+  console.log('Среднее квадратичное отклонение ---', getDeviation(percents));
+  console.log('-----------------');
+}
+
+function getAverage(percents) {
+  return _.round(_.mean(percents), 2);
+}
+
+function getMedian(percents) {
+  percents = _.sortBy(percents, val => val);
+
+  let averageLength = percents.length / 2;
+  let median = (percents[averageLength - 1] + percents[averageLength]) / 2;
+
+  return _.round(median, 2);
+}
+
+function getRange(percents) {
+  let maxVal = _.max(percents);
+  let minVal = _.min(percents);
+
+  return _.round(maxVal - minVal, 2);
+}
+
+function getDeviation(percents) {
+  let average = _.mean(percents);
+  let values = _.map(percents, val => (val - average) * (val - average));
+  let deviation = Math.sqrt(_.mean(values));
+
+  return _.round(deviation, 2);
 }
