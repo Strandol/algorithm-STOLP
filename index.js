@@ -6,6 +6,8 @@ let readline = require('readline');
 const WIDTH = 5;
 const HEIGHT = 6;
 
+const K = 10;
+
 const FIRST_PART = 0.7;
 const SECOND_PART = 0.3;
 
@@ -65,12 +67,42 @@ function classify(examSet) {
     return;
   }
 
-  _.forEach(examSet, (obj) => {
-    let etalon = _.minBy(standarts, (standart) =>
-      calcMetric(standart.val, obj)
-    )
+  // _.forEach(examSet, (obj) => {     // ---- Блишайших соседей
+  //   let etalon = _.minBy(standarts, (standart) =>
+  //     calcMetric(standart.val, obj)
+  //   )
 
-    output.push(`${obj} : ${etalon._class}`)
+  //   output.push(`${obj} : ${etalon._class}`)
+  // })
+
+  _.forEach(examSet, (obj) => {
+    let neighbors = _.map(standarts, standart => {
+      let weight = Math.pow(calcMetric(standart.val, obj), -2);
+      return {
+        ...standart,
+        metric: calcMetric(standart.val, obj),
+        weight
+      }
+    })
+
+    neighbors = _.sortBy(neighbors, obj => obj.metric).slice(0, K);
+
+    neighbors = sortByClasses(neighbors);
+
+    neighbors = _.map(neighbors, (val, key) => {
+      let weight = _.sumBy(val, obj => obj.weight);
+
+      return {
+        _class: key,
+        weight
+      }
+    });
+
+    let _class = _.maxBy(neighbors, (obj) => {
+      return obj.weight
+    })._class
+
+    output.push(`${obj} : ${_class}`)
   })
 
   fs.writeFileSync(OUTPUT_PATH, output.join('\n'));
