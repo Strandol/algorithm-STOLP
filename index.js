@@ -41,20 +41,130 @@ showEntry();
 function teach(teachSet) {
   standarts = [];
 
-  let teachSetWithPowers = calcPowers(teachSet);
-  standarts = findStandarts(teachSetWithPowers);
+  let pairs = [];
 
-  let isHaveMistakes = true;
+  _.forEach(teachSet, (primarySet, _primaryClass) => {
+    _.forEach(teachSet, (secondarySet, _secondClass) => {
+      let pair = _.find(pairs, (val) => {
+        return ((val.from === _secondClass) && (val.with === _primaryClass))
+          || ((val.from === _primaryClass) && (val.with === _secondClass))
+      })
 
-  while (isHaveMistakes) {
-    let mistake = findMaxByPowerMistakeObj(teachSetWithPowers);
+      if (pair || (_secondClass === _primaryClass)) return true;
 
-    if (!mistake) {
-      isHaveMistakes = false;
-    } else {
-      standarts.push(mistake);
+      let minMetrics = [];
+      _.forEach(primarySet, (primObj) => {
+        let toArray = _.map(secondarySet, (val) => {
+          return {
+            ...val
+          }
+        })
+
+        let minMetric = _.minBy(toArray,  (secObj) =>
+          calcMetric(secObj.val, primObj.val)
+        )
+
+        minMetrics.push({
+          ...minMetric,
+          metric: calcMetric(minMetric.val, primObj.val)
+        });
+      })
+
+      let min = _.minBy(minMetrics, 'metric');
+
+      pairs.push({
+        from: _primaryClass,
+        with: min._class,
+        metric: min.metric
+      })
+    })
+  })
+
+  pairs = _.sortBy(pairs, (obj) => obj.metric);
+
+  console.log(pairs);
+
+  _.forEach(pairs, (obj) => {
+    let firstSet = teachSet[obj.from];
+    let secondSet = teachSet[obj.with];
+
+    let firstClassWithPowers = calcPowers(firstSet, secondSet);
+    let secondClassWithPowers = calcPowers(secondSet, firstSet);
+    standarts.push(findStandarts(firstClassWithPowers));
+    standarts.push(findStandarts(secondClassWithPowers));
+
+    standarts = _.uniqWith(standarts, _.isEqual);
+
+    let isHaveMistakes = true;
+
+
+    let teachWithPowers = calcPowersForTeach(teachSet);
+
+    while (isHaveMistakes) {
+      let mistake = findMaxByPowerMistakeObj(teachWithPowers);
+
+      if (!mistake) {
+        isHaveMistakes = false;
+      } else {
+        standarts.push(mistake);
+      }
     }
+  })
+
+  function calcPowersForTeach(set) {
+    function calcMetricIn(obj, set) {
+      let objSet = set.slice(0);
+
+      let index = _.findIndex(objSet, native =>
+        obj.val === native.val
+      )
+
+      objSet.splice(index, 1);
+
+      return _.min(_.map(objSet, (native) =>
+        calcMetric(obj.val, native.val)
+      ))
+    }
+
+    function calcMetricOut(obj, objSet) {
+      objSet = _.filter(objSet, (set, _class) =>
+        _class !== obj._class
+      )
+
+
+      return _.min(_.flattenDeep(objSet).map(anotherObj =>
+        calcMetric(obj.val, anotherObj.val)
+      ))
+    }
+
+    return _.map(set, (nativeSet, _class) => {
+      let withPowers = _.map(nativeSet, obj => {
+        let dIn = calcMetricIn(obj, nativeSet);
+        let dOut = calcMetricOut(obj, set);
+
+        return Object.assign({}, obj, {
+          power: dIn / dOut
+        })
+      })
+
+      return withPowers;
+    })
   }
+
+  // let teachSetWithPowers = calcPowers(teachSet);
+  // standarts = findStandarts(teachSetWithPowers);
+
+  // let isHaveMistakes = true;
+
+  // while (isHaveMistakes) {
+  //   let mistake = findMaxByPowerMistakeObj(teachSetWithPowers);
+
+  //   if (!mistake) {
+  //     isHaveMistakes = false;
+  //   } else {
+  //     standarts.push(mistake);
+  //   }
+  // }
 
   // console.log(standarts);
 }
@@ -75,7 +185,9 @@ function classify(examSet) {
   //   output.push(`${obj} : ${etalon._class}`)
   // })
 
-  _.forEach(examSet, (obj) => {
+  // -------------------------------------------------------------
+
+  _.forEach(examSet, (obj) => { // ---- К - Ближайших соседей
     let neighbors = _.map(standarts, standart => {
       let weight = Math.pow(calcMetric(standart.val, obj), -2);
       return {
@@ -217,39 +329,29 @@ function calcMetricIn(obj, set) {
 }
 
 function calcMetricOut(obj, objSet) {
-  objSet = _.filter(objSet, (set, _class) => 
-    _class !== obj._class
-  )
-
-
-  return _.min(_.flattenDeep(objSet).map(anotherObj =>
+  return _.min(objSet.map(anotherObj =>
     calcMetric(obj.val, anotherObj.val)
   ))
 }
 
-function calcPowers(set) {
-  return _.map(set, (nativeSet, _class) => {
-    let withPowers = _.map(nativeSet, obj => {
-      let dIn = calcMetricIn(obj, nativeSet);
-      let dOut = calcMetricOut(obj, set);
+function calcPowers(firstClass, secondClass) {
+  return _.map(firstClass, (obj) => {
+    let withPower = null;
+    let dIn = calcMetricIn(obj, firstClass);
+    let dOut = calcMetricOut(obj, secondClass);
 
-      return Object.assign({}, obj, {
-        power: dIn / dOut
-      })
+    return Object.assign({}, obj, {
+      power: dIn / dOut
     })
-
-    return withPowers;
   })
 }
 
 function findStandarts(set) {
-  return _.map(set, (objSubset, _class) =>
-    _.maxBy(objSubset, ({ power }) => power)
-  )
+  return _.maxBy(set, ({ power }) => power)
 }
 
-function findMaxByPowerMistakeObj(objSet) {
-  let mistakeObjects = _.flattenDeep(_.map(objSet, (set, _class) => {
+function findMaxByPowerMistakeObj(teachSet) {
+  let mistakeObjects = _.map(teachSet, (set, key) => {
     return _.filter(set, obj => {
       let predictClass = _.minBy(standarts, (standart) =>
         calcMetric(standart.val, obj.val)
@@ -257,12 +359,9 @@ function findMaxByPowerMistakeObj(objSet) {
 
       return predictClass._class !== obj._class
     })
-  }))
+  })
 
-  // console.log(mistakeObjects.map(obj => obj._class).join(' '));
-  // console.log('------------------');
-
-  return _.maxBy(mistakeObjects, 'power');
+  return _.maxBy(_.flattenDeep(_.map(mistakeObjects, (set, _class) => set)), 'power');
 }
 
 function calcMetric(x, y) {
