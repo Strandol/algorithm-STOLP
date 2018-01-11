@@ -82,8 +82,6 @@ function teach(teachSet) {
 
   pairs = _.sortBy(pairs, (obj) => obj.metric);
 
-  console.log(pairs);
-
   _.forEach(pairs, (obj) => {
     let firstSet = teachSet[obj.from];
     let secondSet = teachSet[obj.with];
@@ -96,7 +94,6 @@ function teach(teachSet) {
     standarts = _.uniqWith(standarts, _.isEqual);
 
     let isHaveMistakes = true;
-
 
     let teachWithPowers = calcPowersForTeach(teachSet);
 
@@ -150,23 +147,6 @@ function teach(teachSet) {
       return withPowers;
     })
   }
-
-  // let teachSetWithPowers = calcPowers(teachSet);
-  // standarts = findStandarts(teachSetWithPowers);
-
-  // let isHaveMistakes = true;
-
-  // while (isHaveMistakes) {
-  //   let mistake = findMaxByPowerMistakeObj(teachSetWithPowers);
-
-  //   if (!mistake) {
-  //     isHaveMistakes = false;
-  //   } else {
-  //     standarts.push(mistake);
-  //   }
-  // }
-
-  // console.log(standarts);
 }
 
 function classify(examSet) {
@@ -321,11 +301,15 @@ function calcMetricIn(obj, set) {
     obj.val === native.val
   )
 
-  objSet.splice(index, 1);
+  if (objSet.length !== 1) {
+    objSet.splice(index, 1);
+  }
 
-  return _.min(_.map(objSet, (native) =>
+  let metrics = _.map(objSet, (native) =>
     calcMetric(obj.val, native.val)
-  ))
+  )
+
+  return _.min(metrics);
 }
 
 function calcMetricOut(obj, objSet) {
@@ -435,7 +419,7 @@ function getAverage(percents) {
 function getMedian(percents) {
   percents = _.sortBy(percents, val => val);
 
-  let averageLength = percents.length / 2;
+  let averageLength = Math.round(percents.length / 2);
   let median = (percents[averageLength - 1] + percents[averageLength]) / 2;
 
   return _.round(median, 2);
